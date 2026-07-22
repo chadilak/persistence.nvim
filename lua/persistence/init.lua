@@ -31,8 +31,6 @@ end
 
 local function build_preview(item)
   local lines = {
-    "idx: " .. item.idx,
-    "",
     'dir: "' .. item.dir .. '"',
     "",
     'session: "' .. item.session .. '"',
@@ -146,9 +144,8 @@ end
 
 ---@param opts { prompt: string, handler: function}
 function M.handle_selected(opts)
-  ---@type { session: string, dir: string, branch?: string, idx?: integer }[]
   local items = {}
-  local have = {} ---@type table<string, boolean>
+  local have = {}
   for _, session in ipairs(M.list()) do
     if uv.fs_stat(session) then
       local file = session:sub(#Config.options.dir + 1, -5)
@@ -178,9 +175,30 @@ function M.handle_selected(opts)
     Snacks.picker.pick({
       source = "persistence_sessions",
       items = picker_items,
-      title = opts.prompt,
+      title = "Sessions",
       preview = "preview",
-      format = "text",
+      format = function(entry, _)
+        return {
+          { string.format("%2d ", entry.item.idx), "SnacksPickerBufNr" },
+          { entry.text, "SnacksPickerDir" },
+        }
+      end,
+      layout = {
+        layout = {
+          box = "horizontal",
+          width = 0.8,
+          min_width = 120,
+          height = 0.8,
+          {
+            box = "vertical",
+            border = true,
+            title = "Sessions",
+            { win = "input", height = 1, border = "bottom" },
+            { win = "list", border = "none" },
+          },
+          { win = "preview", title = "Info", border = true, width = 0.5 },
+        },
+      },
       confirm = function(picker, picked)
         picker:close()
         if picked then
