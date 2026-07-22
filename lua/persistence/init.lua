@@ -76,7 +76,7 @@ function M.save()
   vim.cmd("mks! " .. e(M.current()))
 end
 
----@param opts? { last?: boolean }
+---@param opts? { last?: boolean, replace?: boolean }
 function M.load(opts)
   opts = opts or {}
   ---@type string
@@ -91,6 +91,9 @@ function M.load(opts)
   end
   if file and vim.fn.filereadable(file) ~= 0 then
     M.fire("LoadPre")
+    if opts.replace then
+      vim.cmd("silent! %bd")
+    end
     vim.cmd("silent! source " .. e(file))
     M.fire("LoadPost")
   end
@@ -141,12 +144,14 @@ function M.handle_selected(opts)
 end
 
 -- select a session to load
-function M.select()
+---@param opts? { replace?: boolean }
+function M.select(opts)
+  opts = opts or {}
   M.handle_selected({
     prompt = "Select a session: ",
     handler = function(item)
       vim.fn.chdir(item.dir)
-      M.load()
+      M.load({ replace = opts.replace })
     end,
   })
 end
