@@ -29,18 +29,54 @@ local function session_files(path)
   return files
 end
 
-local function build_preview(item)
-  local lines = {
-    'dir: "' .. item.dir .. '"',
-    "",
-    'session: "' .. item.session .. '"',
-    "",
-    "files:",
-  }
-  for _, f in ipairs(session_files(item.session)) do
-    table.insert(lines, '"' .. f .. '"')
+local preview_ns = vim.api.nvim_create_namespace("persistence_session_preview")
+
+local function build_preview_lines(item)
+  local lines = {}
+  local hls = {}
+
+  local function add(line_text, hl_group, col_start, col_end)
+    table.insert(lines, line_text)
+    if hl_group then
+      table.insert(hls, {
+        line = #lines - 1,
+        col_start = col_start or 0,
+        col_end = col_end or #line_text,
+        hl = hl_group,
+      })
+    end
   end
-  return table.concat(lines, "\n")
+
+  local dir_label = "dir: "
+  add(dir_label .. item.dir, "SnacksPickerDir", #dir_label, #dir_label + #item.dir)
+  add("")
+  local session_label = "session: "
+  add(session_label .. item.session, "SnacksPickerMatch", #session_label, #session_label + #item.session)
+  add("")
+  add("files:")
+
+  for _, f in ipairs(session_files(item.session)) do
+    local file_dir = vim.fn.fnamemodify(f, ":h")
+    if file_dir ~= "." then
+      add(f, "SnacksPickerDir", 0, #file_dir)
+    else
+      add(f)
+    end
+  end
+
+  return lines, hls
+end
+
+local function session_preview(ctx)
+  local lines, hls = build_preview_lines(ctx.item.item)
+  vim.bo[ctx.buf].modifiable = true
+  vim.api.nvim_buf_set_lines(ctx.buf, 0, -1, false, lines)
+  vim.bo[ctx.buf].modifiable = false
+  vim.api.nvim_buf_clear_namespace(ctx.buf, preview_ns, 0, -1)
+  for _, h in ipairs(hls) do
+    vim.api.nvim_buf_add_highlight(ctx.buf, preview_ns, h.hl, h.line, h.col_start, h.col_end)
+  end
+  return true
 end
 
 ---@param opts? {branch?: boolean}
@@ -169,14 +205,13 @@ function M.handle_selected(opts)
       picker_items[idx] = {
         text = vim.fn.fnamemodify(item.dir, ":p:~"),
         item = item,
-        preview = { text = build_preview(item) },
       }
     end
     Snacks.picker.pick({
       source = "persistence_sessions",
       items = picker_items,
       title = "Sessions",
-      preview = "preview",
+      preview = session_preview,
       format = function(entry, _)
         return {
           { string.format("%2d ", entry.item.idx), "SnacksPickerBufNr" },
@@ -193,6 +228,9 @@ function M.handle_selected(opts)
             box = "vertical",
             border = true,
             title = "Sessions",
+            wo = {
+              winhighlight = "FloatTitle:SnacksPickerInputTitle,FloatBorder:SnacksPickerInputBorder,NormalFloat:SnacksPickerInput",
+            },
             { win = "input", height = 1, border = "bottom" },
             { win = "list", border = "none" },
           },
