@@ -13,6 +13,38 @@ local file_exists = function(file_path)
   return uv.fs_stat(file_path) and true or false
 end
 
+local function session_files(path)
+  local files = {}
+  local f = io.open(path, "r")
+  if not f then
+    return files
+  end
+  for line in f:lines() do
+    local file = line:match("^badd%s+%+%d+%s+(.+)$")
+    if file then
+      table.insert(files, file)
+    end
+  end
+  f:close()
+  return files
+end
+
+local function build_preview(item)
+  local lines = {
+    "idx: " .. item.idx,
+    "",
+    'dir: "' .. item.dir .. '"',
+    "",
+    'session: "' .. item.session .. '"',
+    "",
+    "files:",
+  }
+  for _, f in ipairs(session_files(item.session)) do
+    table.insert(lines, '"' .. f .. '"')
+  end
+  return table.concat(lines, "\n")
+end
+
 ---@param opts? {branch?: boolean}
 function M.current(opts)
   opts = opts or {}
@@ -114,7 +146,7 @@ end
 
 ---@param opts { prompt: string, handler: function}
 function M.handle_selected(opts)
-  ---@type { session: string, dir: string, branch?: string }[]
+  ---@type { session: string, dir: string, branch?: string, idx?: integer }[]
   local items = {}
   local have = {} ---@type table<string, boolean>
   for _, session in ipairs(M.list()) do
@@ -131,6 +163,34 @@ function M.handle_selected(opts)
       end
     end
   end
+
+  local ok_snacks, Snacks = pcall(require, "snacks")
+  if ok_snacks and Snacks.picker then
+    local picker_items = {}
+    for idx, item in ipairs(items) do
+      item.idx = idx
+      picker_items[idx] = {
+        text = vim.fn.fnamemodify(item.dir, ":p:~"),
+        item = item,
+        preview = { text = build_preview(item) },
+      }
+    end
+    Snacks.picker.pick({
+      source = "persistence_sessions",
+      items = picker_items,
+      title = opts.prompt,
+      preview = "preview",
+      format = "text",
+      confirm = function(picker, picked)
+        picker:close()
+        if picked then
+          opts.handler(picked.item)
+        end
+      end,
+    })
+    return
+  end
+
   vim.ui.select(items, {
     prompt = opts.prompt,
     format_item = function(item)
