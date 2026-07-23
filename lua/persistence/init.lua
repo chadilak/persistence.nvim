@@ -237,10 +237,11 @@ function M.handle_selected(opts)
           { win = "preview", title = "Info", border = true, width = 0.5 },
         },
       },
-      confirm = function(picker, picked)
+      confirm = function(picker, _)
+        local selected = picker:selected({ fallback = true })
         picker:close()
-        if picked then
-          opts.handler(picked.item)
+        for _, entry in ipairs(selected) do
+          opts.handler(entry.item)
         end
       end,
     })
